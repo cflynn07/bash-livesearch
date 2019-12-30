@@ -36,7 +36,6 @@ do
   # CG2: simplified
   # CG3: pinyin
   # GG4: definition
-  
   percent=$(echo "scale=2; ($count/$total_lines)*100" | bc)
   echo "$count/$total_lines ($percent%)"
   line=$(echo $line | sed "s/\"/'/g")
@@ -44,7 +43,8 @@ do
     perl -n -e'/(.+?) (.+?) \[(.+?)\]\ \/(.+)\//
       && print "INSERT INTO dict (simplified, traditional, pinyin, definition)
       VALUES(\"$1\", \"$2\", \"$3\", \"$4\")"')
-  echo $insert_statement | $DB_BIN $DATABASE_NAME
+  db_op "$insert_statement"
+
   if [[ $? -ne 0 ]]; then
     echo $line
     echo $insert_statement
