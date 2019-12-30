@@ -3,24 +3,29 @@
 
 DATABASE_NAME=ce_dict.sqlite3
 DB_BIN=sqlite3
-readonly DATABASE_NAME
+NL=$'\r'
+DICT_FILE=cedict_1_0_ts_utf-8_mdbg.txt
 
-echo "DROP TABLE dict" | $DB_BIN $DATABASE_NAME 2>/dev/null
-echo "CREATE TABLE dict (\
+db_op() {
+  echo "$1" | $DB_BIN $DATABASE_NAME 2>/dev/null
+}
+
+total_lines=$(wc -l $DICT_FILE | awk '{ print $1 }')
+
+db_op "DROP TABLE dict"
+db_op "CREATE TABLE dict (\
   id          INTEGER PRIMARY KEY AUTOINCREMENT , \
   simplified  VARCHAR(10), \
   traditional VARCHAR(10), \
   pinyin      VARCHAR(255), \
   definition  TEXT \
-  )" | $DB_BIN $DATABASE_NAME
+  )"
 
-count=1
-NL=$'\r'
-
-exec < cedict_1_0_ts_utf-8_mdbg.txt
+exec < $DICT_FILE
 while read -r line
 do
   line=${line%$NL}
+  # ignore comment lines
   if [[ $line =~ ^\# ]]; then
     continue
   fi
@@ -31,23 +36,19 @@ do
   # CG2: simplified
   # CG3: pinyin
   # GG4: definition
-
-  echo "-----------------------"
-  echo $line
+  
+  percent=$(echo "scale=2; ($count/$total_lines)*100" | bc)
+  echo "$count/$total_lines ($percent%)"
+  line=$(echo $line | sed "s/\"/'/g")
   insert_statement=$(echo $line |
     perl -n -e'/(.+?) (.+?) \[(.+?)\]\ \/(.+)\//
-      && print "INSERT INTO dict (simplified, traditional, pinyin, definition) VALUES(\"$1\", \"$2\", \"$3\", \"$4\")"')
-  echo $insert_statement
-  echo "-----------------------"
+      && print "INSERT INTO dict (simplified, traditional, pinyin, definition)
+      VALUES(\"$1\", \"$2\", \"$3\", \"$4\")"')
   echo $insert_statement | $DB_BIN $DATABASE_NAME
-
-  if [[ $count -gt 1000 ]]; then
-    exit
+  if [[ $? -ne 0 ]]; then
+    echo $line
+    echo $insert_statement
   fi
-  count=$(( count + 1 ))
 
-#  echo "INSERT INTO tbl1 VALUES( \
-#    $count, \
-#    \"tim\" \
-#  )" | $DB_BIN $DATABASE_NAME
+  count=$(( ${count-1} + 1 ))
 done  
