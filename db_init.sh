@@ -6,11 +6,24 @@ DB_BIN=sqlite3
 NL=$'\r'
 DICT_FILE=cedict_1_0_ts_utf-8_mdbg.txt
 
-db_op() {
-  echo "$1" | $DB_BIN $DATABASE_NAME 2>/dev/null
-}
+insert_sql_head="INSERT INTO dict (simplified, traditional, pinyin, definition)"
+insert_sql_values=""
+count=0
 
 total_lines=$(wc -l $DICT_FILE | awk '{ print $1 }')
+
+db_op() {
+  echo "$1" | $DB_BIN $DATABASE_NAME 2>/dev/null
+  if [[ $? -ne 0 ]]; then
+    echo "$1"
+  fi
+}
+
+do_insert() {
+  insert_sql_values=${insert_sql_values/%,/;}
+  db_op "$insert_sql_head $insert_sql_values"
+  insert_sql_values=""
+}
 
 db_op "DROP TABLE dict"
 db_op "CREATE TABLE dict (\
@@ -39,16 +52,18 @@ do
   percent=$(echo "scale=2; ($count/$total_lines)*100" | bc)
   echo "$count/$total_lines ($percent%)"
   line=$(echo $line | sed "s/\"/'/g")
-  insert_statement=$(echo $line |
+
+  insert_sql_values=${insert_sql_values:-VALUES}
+  insert_sql_values+=$(echo $line |
     perl -n -e'/(.+?) (.+?) \[(.+?)\]\ \/(.+)\//
-      && print "INSERT INTO dict (simplified, traditional, pinyin, definition)
-      VALUES(\"$1\", \"$2\", \"$3\", \"$4\")"')
-  db_op "$insert_statement"
+      && print "(\"$1\", \"$2\", \"$3\", \"$4\"),"')
 
-  if [[ $? -ne 0 ]]; then
-    echo $line
-    echo $insert_statement
+  count=$(( count + 1 ))
+  if [[ $((count % 100)) -eq 0 ]]; then
+    echo "insert batch"
+    do_insert
   fi
+done
 
-  count=$(( ${count-1} + 1 ))
-done  
+echo "final insert batch"
+do_insert
