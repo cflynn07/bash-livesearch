@@ -10,7 +10,6 @@ readonly ESC
 tty_input=""
 
 clear
-
 _process_input() {
   local input=$1
   clear
@@ -23,7 +22,6 @@ _process_input() {
     read -rsn2 input2 2>/dev/null >&2;
     echo "nonregular keypress"
     echo -n "$input$input2" | hexdump
-
   elif [[ "$input" == $'\x7F' ]]; then
     # backspace
     if [[ -n "$tty_input" ]]; then
